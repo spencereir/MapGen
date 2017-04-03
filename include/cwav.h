@@ -3,6 +3,8 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
+#include "fft.hpp"
 
 enum CHANNEL { MONO = 0, STEREO_L = 0, STEREO_R };
 
@@ -22,15 +24,24 @@ private:
 	uint32_t sc2ID;
 	uint32_t sc2Size;
 	uint16_t **sample;
-	uint32_t numSamples;
+	bool has_frame;
+	int resolution;
+	int sample_index;
+	int windowLen;
+	std::vector< std::vector< double > > dft;
+
 public:
 	WAV(std::string filename);
-	uint16_t getNumSamples() { return numSamples; }
+	uint16_t getNumSamples() { return sc2Size / (2 * numChannels); }
 	uint16_t getNumChannels() { return numChannels; }
 	uint16_t get(int, int=0);
 	void set(int, uint16_t, int=0);
-	void setNumChannels(int n) { numChannels = n; }
-	void save(std::string target);
+	void setNumChannels(int);
+	void save(std::string);
+	void buildDFT(int, double);
+	void nextFrame();
+	bool hasFrame();
+	std::vector< std::vector< double > > getFrame();
 };
 
 #endif

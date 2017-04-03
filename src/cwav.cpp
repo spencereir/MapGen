@@ -1,6 +1,7 @@
 #include "cwav.h"
 #include <iostream>
 #include <fstream>
+#include <cmath>
 
 unsigned char *c_to_uc(char *c) {
 	unsigned char *a = (unsigned char*)malloc(sizeof(c));
@@ -66,7 +67,7 @@ WAV::WAV(std::string filename) {
 	using namespace std;
 	
 	ifstream in(filename, ios::binary | ios::ate);
-	ifstream::pos_type pos = in.tellg();
+	//ifstream::pos_type pos = in.tellg();
 	in.seekg(0, ios::beg);
 	
 	char *c = new char[4];
@@ -134,10 +135,9 @@ WAV::WAV(std::string filename) {
 	in.read(c, 4);
 	storeLE(c, sc2Size);
 	for (int i = 0; i < numChannels; i++) {
-		sample[i] = (uint16_t*)malloc(sc2Size * (sizeof(uint16_t)));	
+		sample[i] = (uint16_t*)malloc((sc2Size / (2 * numChannels)) * (sizeof(uint16_t)));	
 	}
-	numSamples = 0;
-	for (int i = 0; i < sc2Size; i++) {
+	for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
 		for (int j = 0; j < numChannels; j++) {
 			in.read(c, 2);
 			if (in.gcount() == 0) {
@@ -145,8 +145,70 @@ WAV::WAV(std::string filename) {
 			}
 			storeLE(c, sample[j][i]);
 		}
-		numSamples++;
 	}
+}
+
+void WAV::buildDFT(int _resolution, double windowTime) {
+	if (_resolution > windowTime * sampleRate) {
+		std::cerr << "Error: window length too small for resolution" << std::endl;
+		return;
+	}
+	resolution = _resolution;
+	windowLen = windowTime * sampleRate;
+	/*std::cerr << sc2Size / (2 * numChannels) << std::endl;
+	D.clear();
+	for (int i = 0; i < numChannels; i++) {
+		std::vector< std::complex<double> > cSample(sc2Size / (2 * numChannels));
+		for (int j = 0; j < sc2Size / (2 * numChannels); j++) {
+			cSample[j] = std::complex<double>((double)sample[i][j], 0.0);
+		}
+		D.push_back(DFT(cSample, resolution, (int)(windowLen * sampleRate)));
+	}
+	std::cerr << "Done" << " " << windowLen * sampleRate<<std::endl;*/
+	dft.resize(numChannels);
+	for (int i = 0; i < numChannels; i++)
+		dft[i].resize(resolution);
+	sample_index = 0;
+	has_frame = true;
+	nextFrame();
+}
+
+void WAV::nextFrame() {
+	if (!has_frame) {
+		return;
+	}
+	if (sample_index + windowLen >= (int)sc2Size / (2 * numChannels)) {
+		std::cerr << "No frames left" << std::endl;
+		has_frame = false;
+	}
+	for (int i = 0; i < numChannels; i++) {
+		std::vector< double > inReal(windowLen, 0.0);
+		std::vector< double > inImag(windowLen, 0.0);
+		for (int j = 0; j < windowLen; j++) {
+			inReal[j] = (double)sample[i][sample_index + j];
+		}
+		Fft::transform(inReal, inImag);
+		for (int j = 0; j < windowLen; j++) {
+			dft[i][resolution*j/windowLen] = sqrt(pow(inReal[j], 2.0) + pow(inImag[j], 2.0));
+		}
+	}
+	sample_index += windowLen;
+}
+
+bool WAV::hasFrame() {
+	return has_frame;
+}
+
+std::vector< std::vector< double > > WAV::getFrame() {
+	std::vector< std::vector< double > > ret;
+	for (int i = 0; i < numChannels; i++) {
+		std::vector< double > c;
+		for (int j = 0; j < resolution; j++) {
+			c.push_back(dft[i][j]);
+		}
+		ret.push_back(c);
+	}
+	return ret;
 }
 
 uint16_t WAV::get(int i, int chan) {
@@ -175,14 +237,33 @@ void WAV::save(std::string target) {
 	out.write(uint16_to_c_LE(bitsPerSample), 2);
 	out.write(uint32_to_c(sc2ID), 4);
 	out.write(uint32_to_c_LE(sc2Size), 4);
-	int bytesWritten = 0;
-	for (int i = 0; i < numSamples; i++) {
+	for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
 		for (int j = 0; j < numChannels; j++) {
 			out.write(uint16_to_c_LE(sample[j][i]), 2);		
-			bytesWritten += 2;
 		}
-		if (bytesWritten >= sc2Size)
-			break;
 	}
 }
+
+uint16_t max(uint16_t a, uint16_t b) {
+	return (a > b) ? a : b;
+}
+
+void WAV::setNumChannels(int chan) { 
+	sc2Size = (numChannels==1?(2*sc2Size):sc2Size/2); 
+	numChannels = chan;
+	if (chan == 2) {
+		sample = (uint16_t**)realloc(sample, 2*sizeof(uint16_t*));	
+		sample[STEREO_R] = (uint16_t*)malloc((sc2Size / (2 * numChannels)) * (sizeof(uint16_t)));
+	} else {
+		sample = (uint16_t**)realloc(sample, sizeof(uint16_t*));
+	}
+	for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
+		if (chan == 1) {
+			sample[MONO][i] = (sample[STEREO_L][i] >> 1) + (sample[STEREO_R][i] >> 1);	
+		} else {
+			sample[STEREO_L][i] = sample[STEREO_R][i] = sample[MONO][i];
+		}
+	}
+}
+
 

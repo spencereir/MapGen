@@ -6,7 +6,3 @@
 
 // Ignore binaries
 *.exe
-
-// Ignore Dev-C++ project files
-*.dev
-*.layout
