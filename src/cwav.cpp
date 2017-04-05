@@ -2,6 +2,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#define max(a,b) (a > b ? a : b)
 
 unsigned char *c_to_uc(char *c) {
 	unsigned char *a = (unsigned char*)malloc(sizeof(c));
@@ -173,6 +174,16 @@ void WAV::buildDFT(int _resolution, double windowTime) {
 	nextFrame();
 }
 
+int WAV::distr(int ind) {
+	if (ind == windowLen - 1) {
+		return resolution - 1;
+	}
+	//distr(0) = 0, distr(windowLen-1) = resolution-1, distr(x) is logarithmically scaled
+	//distr(x) = log(1+x)
+	//(R-1) log(1 + ind) / log(L) at L = 
+	return (int)floor((double)resolution * log(ind+1) / log(windowLen+1));
+}
+
 void WAV::nextFrame() {
 	if (!has_frame) {
 		return;
@@ -180,6 +191,7 @@ void WAV::nextFrame() {
 	if (sample_index + windowLen >= (int)sc2Size / (2 * numChannels)) {
 		std::cerr << "No frames left" << std::endl;
 		has_frame = false;
+		return;
 	}
 	for (int i = 0; i < numChannels; i++) {
 		std::vector< double > inReal(windowLen, 0.0);
@@ -188,8 +200,11 @@ void WAV::nextFrame() {
 			inReal[j] = (double)sample[i][sample_index + j];
 		}
 		Fft::transform(inReal, inImag);
-		for (int j = 0; j < windowLen; j++) {
-			dft[i][resolution*j/windowLen] = sqrt(pow(inReal[j], 2.0) + pow(inImag[j], 2.0));
+		for (int j = 0; j < resolution; j++) {
+			dft[i][j] = 0;
+		}
+		for (int j = 1; j < windowLen; j++) {
+			dft[i][distr(j)] = max(dft[i][distr(j)], sqrt(pow(inReal[j], 2.0) + pow(inImag[j], 2.0)));
 		}
 	}
 	sample_index += windowLen;
@@ -242,10 +257,6 @@ void WAV::save(std::string target) {
 			out.write(uint16_to_c_LE(sample[j][i]), 2);		
 		}
 	}
-}
-
-uint16_t max(uint16_t a, uint16_t b) {
-	return (a > b) ? a : b;
 }
 
 void WAV::setNumChannels(int chan) { 

@@ -29,6 +29,7 @@ private:
 	int sample_index;
 	int windowLen;
 	std::vector< std::vector< double > > dft;
+	int distr(int);
 
 public:
 	WAV(std::string filename);

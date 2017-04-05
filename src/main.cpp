@@ -7,15 +7,14 @@ using namespace std;
 int main() {
 	ios::sync_with_stdio(false);
 	cin.tie(0);
-	WAV W("sin440.wav");
-	system("sin440.wav");
-	double windowTime = 0.1;
+	WAV W("aaaa.wav");
+	system("aaaa.wav");
+	double windowTime = 0.15;
 	const int height = 65, width= 300;
 	W.buildDFT(width, windowTime);
-	double m = 1e7;
+	double m = 4e7;
 	clock_t last_time = clock();
 	while (W.hasFrame()) {
-		
 		last_time = clock();
 		auto x = W.getFrame();
 		if (x.empty()) {
@@ -29,6 +28,7 @@ int main() {
 			}
 		}
 		for (int i = 0; i < width; i++) {
+			//m = max(m, v[i]);
 			int barHeight = min(height,(int)(height * v[i] / m));
 			for (int j = 0, l = height-1; j < barHeight; j++, l--) {
 				out[l][i] = '#';
@@ -42,7 +42,7 @@ int main() {
 			cout << endl;
 		}
 		W.nextFrame();
-		while ((clock() - last_time)/CLOCKS_PER_SEC < windowTime/10.0) {
+		while ((double)(clock() - last_time)/CLOCKS_PER_SEC < windowTime - 0.0045) {
 		}
 	}
 	return 0;
