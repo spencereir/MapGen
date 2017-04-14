@@ -1,7 +1,8 @@
 #include "cwav.h"
 #include <iostream>
-#include <bits/stdc++.h>
-#include <Windows.h>
+#include <fstream>
+#include <vector>
+#include <string>
 
 using namespace std;
 
