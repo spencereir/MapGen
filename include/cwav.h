@@ -6,7 +6,7 @@
 #include <vector>
 #include "fft.hpp"
 
-enum CHANNEL { MONO = 0, STEREO_L = 0, STEREO_R };
+enum CHANNEL { MON = 0, STEREO_L = 0, STEREO_R };
 
 class WAV {
 private:
@@ -28,6 +28,7 @@ private:
 	int resolution;
 	int sample_index;
 	int windowLen;
+	std::string name;
 	std::vector< std::vector< double > > dft;
 	int distr(int);
 
@@ -38,7 +39,7 @@ public:
 	uint16_t get(int, int=0);
 	void set(int, uint16_t, int=0);
 	void setNumChannels(int);
-	void save(std::string);
+	void save(std::string, std::string);
 	void buildDFT(int, double);
 	void nextFrame();
 	bool hasFrame();

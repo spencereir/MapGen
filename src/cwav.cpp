@@ -2,6 +2,8 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include "lame.h"
+
 #define max(a,b) (a > b ? a : b)
 
 unsigned char *c_to_uc(char *c) {
@@ -66,6 +68,7 @@ char *uint16_to_c_LE(uint16_t t) {
 
 WAV::WAV(std::string filename) {
 	using namespace std;
+	name = filename;
 	
 	ifstream in(filename, ios::binary | ios::ate);
 	//ifstream::pos_type pos = in.tellg();
@@ -201,7 +204,7 @@ void WAV::nextFrame() {
 		}
 		Fft::transform(inReal, inImag);
 		for (int j = 0; j < resolution; j++) {
-			dft[i][j] = 0;
+			dft[i][j] /= 2;
 		}
 		for (int j = 1; j < windowLen; j++) {
 			dft[i][distr(j)] = max(dft[i][distr(j)], sqrt(pow(inReal[j], 2.0) + pow(inImag[j], 2.0)));
@@ -234,28 +237,62 @@ void WAV::set(int i, uint16_t val, int chan) {
 	sample[chan][i]= val;	
 }
 
-void WAV::save(std::string target) {
-	using namespace std;
-	
-	ofstream out(target, ios::binary);
-	
-	out.write(uint32_to_c(chunkID), 4);
-	out.write(uint32_to_c_LE(chunkSize), 4);
-	out.write(uint32_to_c(format), 4);
-	out.write(uint32_to_c(sc1ID), 4);
-	out.write(uint32_to_c_LE(sc1Size), 4);
-	out.write(uint16_to_c_LE(audioFormat), 2);
-	out.write(uint16_to_c_LE(numChannels), 2);
-	out.write(uint32_to_c_LE(sampleRate), 4);
-	out.write(uint32_to_c_LE(byteRate), 4);
-	out.write(uint16_to_c_LE(blockAlign), 2);
-	out.write(uint16_to_c_LE(bitsPerSample), 2);
-	out.write(uint32_to_c(sc2ID), 4);
-	out.write(uint32_to_c_LE(sc2Size), 4);
-	for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
-		for (int j = 0; j < numChannels; j++) {
-			out.write(uint16_to_c_LE(sample[j][i]), 2);		
+void WAV::save(std::string target, std::string fmt="WAV") {
+	if (fmt == "WAV") {
+		using namespace std;
+		
+		ofstream out(target, ios::binary);
+		
+		out.write(uint32_to_c(chunkID), 4);
+		out.write(uint32_to_c_LE(chunkSize), 4);
+		out.write(uint32_to_c(format), 4);
+		out.write(uint32_to_c(sc1ID), 4);
+		out.write(uint32_to_c_LE(sc1Size), 4);
+		out.write(uint16_to_c_LE(audioFormat), 2);
+		out.write(uint16_to_c_LE(numChannels), 2);
+		out.write(uint32_to_c_LE(sampleRate), 4);
+		out.write(uint32_to_c_LE(byteRate), 4);
+		out.write(uint16_to_c_LE(blockAlign), 2);
+		out.write(uint16_to_c_LE(bitsPerSample), 2);
+		out.write(uint32_to_c(sc2ID), 4);
+		out.write(uint32_to_c_LE(sc2Size), 4);
+		for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
+			for (int j = 0; j < numChannels; j++) {
+				out.write(uint16_to_c_LE(sample[j][i]), 2);		
+			}
 		}
+	} else if (fmt == "MP3") {
+	    int read, write;
+
+	    FILE *pcm = fopen(name.c_str(), "rb");
+	    FILE *mp3 = fopen(target.c_str(), "wb");
+	    fseek(pcm, 4*1024, SEEK_CUR);
+
+	    const int PCM_SIZE = 8192;
+	    const int MP3_SIZE = 8192;
+
+	    short int pcm_buffer[PCM_SIZE*2];
+	    unsigned char mp3_buffer[MP3_SIZE];
+
+	    lame_t lame = lame_init();
+	    lame_set_in_samplerate(lame, sampleRate);
+	    lame_set_VBR(lame, vbr_default);
+	    lame_init_params(lame);
+
+	    do {
+	        read = fread(pcm_buffer, 2*sizeof(short int), PCM_SIZE, pcm);
+	        if (read == 0)
+	            write = lame_encode_flush(lame, mp3_buffer, MP3_SIZE);
+	        else
+	            write = lame_encode_buffer_interleaved(lame, pcm_buffer, read, mp3_buffer, MP3_SIZE);
+	        fwrite(mp3_buffer, write, 1, mp3);
+	    } while (read != 0);
+
+	    lame_close(lame);
+	    fclose(mp3);
+	    fclose(pcm);
+	} else {
+		std::cerr << "Unrecognized format `" << format << "`\n";
 	}
 }
 
@@ -270,9 +307,9 @@ void WAV::setNumChannels(int chan) {
 	}
 	for (int i = 0; i < (int)sc2Size / (2 * numChannels); i++) {
 		if (chan == 1) {
-			sample[MONO][i] = (sample[STEREO_L][i] >> 1) + (sample[STEREO_R][i] >> 1);	
+			sample[MON][i] = (sample[STEREO_L][i] >> 1) + (sample[STEREO_R][i] >> 1);	
 		} else {
-			sample[STEREO_L][i] = sample[STEREO_R][i] = sample[MONO][i];
+			sample[STEREO_L][i] = sample[STEREO_R][i] = sample[MON][i];
 		}
 	}
 }
